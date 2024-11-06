@@ -1,4 +1,3 @@
-from chatbot import CB
 from flask import Flask, render_template, request
 
 app = Flask(__name__)
@@ -10,5 +9,9 @@ def home():
 @app.route("/get")
 def get_bot_response():
     userText = request.args.get('msg')
-    return str(CB.get_response(userText))
+    return str(get_response(userText))
+
+def get_response(userText):
+    return "Default response"
+
 app.run(debug = True)
