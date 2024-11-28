@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request
+import chatbot
 
 app = Flask(__name__)
 
@@ -12,6 +13,6 @@ def get_bot_response():
     return str(get_response(userText))
 
 def get_response(userText):
-    return "Default response"
+    return chatbot.reply(userText)
 
 app.run(debug = True)
