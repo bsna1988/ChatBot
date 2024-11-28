@@ -1,18 +1,42 @@
-﻿from haystack.document_stores import FAISSDocumentStore
-import nltk
+﻿import nltk
 from nltk.tokenize import sent_tokenize, word_tokenize
 from nltk.tag import pos_tag
-from haystack.nodes import PreProcessor
 from pathlib import Path
 from bs4 import BeautifulSoup
 import unicodedata
 from haystack.nodes import EmbeddingRetriever
 from haystack.nodes import FARMReader
-
 from haystack.pipelines import Pipeline
+from haystack.nodes import PreProcessor
+from haystack.document_stores import ElasticsearchDocumentStore
+import os
+import shutil
+
+
+from haystack.document_stores import ElasticsearchDocumentStore
+
+
+# make sure these indices do not collide with existing ones, the indices will be wiped clean before data is inserted
+doc_index = "docs"
+label_index = "labels"
+
+# Get the host where Elasticsearch is running, default to localhost
+host = os.environ.get("ELASTICSEARCH_HOST", "localhost")
+
+# Connect to Elasticsearch
+document_store = ElasticsearchDocumentStore(
+    host=host,
+    username="",
+    password="",
+    index=doc_index,
+    label_index=label_index,
+    embedding_field="emb",
+    embedding_dim=768,
+    excluded_meta_data=["emb"],
+    similarity="cosine",
+)
 
 reader = FARMReader(model_name_or_path="deepset/deberta-v3-large-squad2", use_gpu=True)
-
 
 # Download necessary NLTK resources
 nltk.download('punkt')
@@ -52,9 +76,8 @@ def filter_docs_with_nouns_and_verbs(all_docs):
     # Filter the documents using the contains_nouns_and_verbs function
     return [doc for doc in all_docs if contains_nouns_and_verbs(doc['content'])]
 
-document_store = FAISSDocumentStore()
 
-doc_dir = "content/"
+doc_dir = "/Users/sbogolii/ChatBot/content"
 
 # create a list of dictionaries from the HTML files in the input directory
 all_docs = []
@@ -86,27 +109,46 @@ docs = preprocessor.process(docs)
 
 print(f"n_files_input: {len(all_docs)}\nn_docs_output: {len(docs)}")
 
+# set the path of the output directory
+output_dir = '/Users/sbogolii/ChatBot/preprocessed_docs/'
+#shutil.rmtree(output_dir)
+if not os.path.exists(output_dir):
+    os.makedirs(output_dir)
+
+
+# save the preprocessed documents to the output directory
+for doc in all_docs:
+    filename = doc['meta']['name'].replace('.html', '.txt')
+    with open(os.path.join(output_dir, filename), 'w', encoding='utf-8') as f:
+        f.write(doc['content'])
+
 document_store.delete_documents()
 document_store.write_documents(docs)
 
 retriever = EmbeddingRetriever(
     document_store=document_store,
-    embedding_model="sentence-transformers/multi-qa-mpnet-base-dot-v1",
+    embedding_model="sentence-transformers/multi-qa-mpnet-base-cos-v1",
 )
+
+# Important:
+# Now that we initialized the Retriever, we need to call update_embeddings() to iterate over all
+# previously indexed documents and update their embedding representation.
+# While this can be a time consuming operation (depending on the corpus size), it only needs to be done once.
+# At query time, we only need to embed the query and compare it to the existing document embeddings, which is very fast.
+document_store.update_embeddings(retriever)
 
 pipe = Pipeline()
 pipe.add_node(component=retriever, name="Retriever", inputs=["Query"])
 pipe.add_node(component=reader, name="Reader", inputs=["Retriever"])
 
 
-
-def reply(query):
+def reply(q):
     prediction = pipe.run(
-        query=query,
+        query=q,
         params={
             "Retriever": {"top_k": 5},
             "Reader": {"top_k": 1}
         }
     )
 
-    return prediction.answers
+    return prediction['answers'][0].answer

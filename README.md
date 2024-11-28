@@ -7,6 +7,8 @@
 ## Usage:-
 - Download this repository via GIT or zip.
 - Open CMD/Terminal in directory of this repository(Python 3.6 or 3.6+ should be installed)
+- Run elasticsearch `docker run -p 127.0.0.1:9200:9200 -p 127.0.0.1:9300:9300 -e "discovery.type=single-node" docker.elastic.co/elasticsearch/elasticsearch:7.17.25`
+- `PYTORCH_ENABLE_MPS_FALLBACK=1`
 - type `pip install -r requirements.txt`.
 - After installation run `flask run`.
 - Go to the `127.0.0.1:5000/chatbot`, You can start chatting.
